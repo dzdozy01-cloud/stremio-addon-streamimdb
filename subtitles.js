@@ -103,7 +103,8 @@ async function getDownloadLink(fileId) {
     linkCache.set(fileId, { link, fetchedAt: Date.now() });
     return link;
   } catch (e) {
-    console.log('[subs] Erro ao obter link:', e.message);
+    const body = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+    console.log(`[subs] Erro ao obter link (${e.response?.status}): ${body}`);
     return null;
   }
 }
