@@ -62,7 +62,7 @@ app.get('/', (req, res) => {
   <div class="card">
     <img class="logo" src="https://raw.githubusercontent.com/F100Pilot/stremio-addon-streamimdb/main/icon.png" alt="icon">
     <h1>StreamIMDb Connector</h1>
-    <div class="version">v1.1.1 &nbsp;·&nbsp; Movies &amp; Series</div>
+    <div class="version">v1.2.0 &nbsp;·&nbsp; Movies &amp; Series</div>
     <p>Stream movies and series natively inside Stremio — no browser required.</p>
     <a class="btn btn-install" id="install-btn" href="#">&#9654; Install in Stremio</a>
     <a class="btn btn-donate" href="https://paypal.me/F100Pilot" target="_blank">&#9829; Donate via PayPal</a>
@@ -89,13 +89,11 @@ app.get('/', (req, res) => {
 });
 
 
-// Proxy de subtítulos: descarrega ZIP do subdl, extrai SRT do episódio, serve como .srt
+// Proxy de subtítulos: descarrega SRT do OpenSubtitles e serve como .srt
 app.get('/subs/:fileId', async (req, res) => {
-  const fileId  = req.params.fileId.replace(/\.srt$/i, '');
-  const season  = req.query.s || null;
-  const episode = req.query.e || null;
+  const fileId = req.params.fileId.replace(/\.srt$/i, '');
   if (!subsEnabled) return res.status(503).end();
-  const content = await getSrtContent(fileId, season, episode);
+  const content = await getSrtContent(fileId);
   if (!content) return res.status(404).end();
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -106,7 +104,7 @@ app.get('/health', (req, res) => {
   const mem = process.memoryUsage();
   res.json({
     status: 'ok',
-    version: '1.1.1',
+    version: '1.2.0',
     uptimeSeconds: Math.floor((Date.now() - START_TIME) / 1000),
     scraper: getStatus(),
     memory: {
