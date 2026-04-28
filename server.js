@@ -2,7 +2,6 @@ const express = require('express');
 const { getRouter } = require('stremio-addon-sdk');
 const addonInterface = require('./addon');
 const { getStatus } = require('./scraper');
-const { getDownloadUrl, enabled: subsEnabled } = require('./subtitles');
 
 const START_TIME = Date.now();
 
@@ -88,17 +87,6 @@ app.get('/', (req, res) => {
 </html>`);
 });
 
-// Proxy de subtítulos — gera URL fresca do OpenSubtitles e redireciona
-// URL termina em .srt para o Stremio reconhecer o formato
-app.get('/subs/:fileId', async (req, res) => {
-  const fileId = req.params.fileId.replace(/\.srt$/i, '');
-  console.log(`[subs proxy] Pedido fileId: ${fileId}`);
-  if (!subsEnabled) return res.status(503).end();
-  const url = await getDownloadUrl(fileId);
-  if (!url) { console.log('[subs proxy] URL não encontrada'); return res.status(404).end(); }
-  console.log(`[subs proxy] Redirect → ${url.substring(0, 60)}`);
-  res.redirect(302, url);
-});
 
 app.get('/health', (req, res) => {
   const mem = process.memoryUsage();

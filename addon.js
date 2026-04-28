@@ -1,10 +1,5 @@
 const { addonBuilder } = require('stremio-addon-sdk');
 const { fetchVideoSource } = require('./scraper');
-const { searchSubtitles, enabled: subsEnabled } = require('./subtitles');
-
-const ADDON_URL = process.env.ADDON_URL
-  || process.env.RENDER_EXTERNAL_URL
-  || `http://localhost:${process.env.PORT || 7000}`;
 
 const manifest = {
   id: 'org.local.streamimdb',
@@ -32,33 +27,21 @@ builder.defineStreamHandler(async (args) => {
       ? `https://streamimdb.me/embed/${imdbId}/${season}/${episode}/`
       : `https://streamimdb.me/embed/${imdbId}/`;
 
-    // Busca stream e legendas em paralelo
-    const [result, subResults] = await Promise.all([
-      fetchVideoSource(imdbId, type, season, episode).catch(e => {
-        console.error(`[handler] Erro no scraper: ${e.message}`);
-        return null;
-      }),
-      subsEnabled
-        ? searchSubtitles(imdbId, season, episode)
-        : Promise.resolve([]),
-    ]);
-
-    const subtitles = subResults.map(({ lang, fileId }) => ({
-      id: `${imdbId}-${lang}`,
-      url: `${ADDON_URL}/subs/${fileId}.srt`,
-      lang,
-    }));
+    let result = null;
+    try {
+      result = await fetchVideoSource(imdbId, type, season, episode);
+    } catch (scraperErr) {
+      console.error(`[handler] Erro no scraper: ${scraperErr.message}`);
+    }
 
     if (result && result.type === 'direct') {
-      if (subtitles.length) console.log(`[handler] Legendas no stream: ${JSON.stringify(subtitles)}`);
-      const stream = {
-        url: result.url,
-        name: 'StreamIMDb',
-        title: 'Stream direto',
-        behaviorHints: { bingeGroup: `streamimdb|${imdbId}` },
+      return {
+        streams: [{
+          url: result.url,
+          name: 'StreamIMDb',
+          title: 'Stream direto',
+        }]
       };
-      if (subtitles.length) stream.subtitles = subtitles;
-      return { streams: [stream] };
     }
 
     return {
