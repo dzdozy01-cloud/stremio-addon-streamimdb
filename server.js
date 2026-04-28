@@ -2,6 +2,7 @@ const express = require('express');
 const { getRouter } = require('stremio-addon-sdk');
 const addonInterface = require('./addon');
 const { getStatus } = require('./scraper');
+const { getSrtContent, enabled: subsEnabled } = require('./subtitles');
 
 const START_TIME = Date.now();
 
@@ -87,6 +88,17 @@ app.get('/', (req, res) => {
 </html>`);
 });
 
+
+// Proxy de subtítulos: descarrega ZIP do subdl, extrai SRT, serve como .srt
+app.get('/subs/:fileId', async (req, res) => {
+  const fileId = req.params.fileId.replace(/\.srt$/i, '');
+  if (!subsEnabled) return res.status(503).end();
+  const content = await getSrtContent(fileId);
+  if (!content) return res.status(404).end();
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.send(content);
+});
 
 app.get('/health', (req, res) => {
   const mem = process.memoryUsage();
