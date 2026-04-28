@@ -19,7 +19,7 @@ const srtCache = new Map();
 async function searchSubtitles(imdbId, season, episode) {
   if (!enabled) return [];
 
-  const params = { api_key: API_KEY, imdb_id: imdbId, languages: 'en,pt,pb' };
+  const params = { api_key: API_KEY, imdb_id: imdbId, languages: 'en,pt,pt-BR' };
   if (season)  { params.season_number  = season;  }
   if (episode) { params.episode_number = episode; }
 
@@ -36,7 +36,7 @@ async function searchSubtitles(imdbId, season, episode) {
     }
 
     const found = Object.entries(byLang).map(([lang, fileId]) => ({ lang, fileId }));
-    console.log(`[subs] ${found.length} pack(s) encontrado(s) para S${season}E${episode}`);
+    console.log(`[subs] ${found.length} pack(s) para S${season}E${episode} — langs: ${found.map(f=>f.lang).join(',') || 'nenhum'}`);
     return found;
   } catch (e) {
     console.log('[subs] Erro na pesquisa:', e.message);
