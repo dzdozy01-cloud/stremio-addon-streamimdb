@@ -6,7 +6,7 @@ const USERNAME = process.env.OPENSUBTITLES_USERNAME;
 const PASSWORD = process.env.OPENSUBTITLES_PASSWORD;
 const API_BASE = 'https://api.opensubtitles.com/api/v1';
 
-const enabled = !!(API_KEY && USERNAME && PASSWORD);
+const enabled = false; // desactivado — OpenSubtitles /download bloqueado por Cloudflare no Render
 
 // JWT token state
 let jwtToken   = null;

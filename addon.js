@@ -53,10 +53,8 @@ builder.defineStreamHandler(async (args) => {
       lang,
     }));
 
-    // bingeGroup enables auto-play; subtitles reload because defineStreamHandler runs per episode
-    const behaviorHints = type === 'series'
-      ? { bingeGroup: `streamimdb-${imdbId}` }
-      : undefined;
+    // bingeGroup desactivado — reactivar quando legendas estiverem operacionais
+    const behaviorHints = undefined;
 
     if (result && result.type === 'direct') {
       const stream = {
