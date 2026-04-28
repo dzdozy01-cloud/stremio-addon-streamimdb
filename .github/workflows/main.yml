@@ -11,7 +11,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4 # This uses Node 24
+        uses: actions/checkout@v4 # This uses Node 24 automatically
 
       - name: Sync from Upstream
         run: |
@@ -20,6 +20,7 @@ jobs:
           git remote add upstream https://github.com/F100Pilot/stremio-addon-streamimdb.git
           git fetch upstream
           git checkout main
-          # This merges changes only if they exist. If not, it just says so.
+          # This line merges changes ONLY if they exist. 
+          # If not, it just says "Already up to date" and stays GREEN.
           git merge upstream/main --ff-only || echo "Already up to date."
           git push origin main || echo "Nothing new to push."
