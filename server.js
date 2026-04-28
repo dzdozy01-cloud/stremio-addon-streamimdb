@@ -89,11 +89,13 @@ app.get('/', (req, res) => {
 });
 
 
-// Proxy de subtítulos: descarrega ZIP do subdl, extrai SRT, serve como .srt
+// Proxy de subtítulos: descarrega ZIP do subdl, extrai SRT do episódio, serve como .srt
 app.get('/subs/:fileId', async (req, res) => {
-  const fileId = req.params.fileId.replace(/\.srt$/i, '');
+  const fileId  = req.params.fileId.replace(/\.srt$/i, '');
+  const season  = req.query.s || null;
+  const episode = req.query.e || null;
   if (!subsEnabled) return res.status(503).end();
-  const content = await getSrtContent(fileId);
+  const content = await getSrtContent(fileId, season, episode);
   if (!content) return res.status(404).end();
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.setHeader('Access-Control-Allow-Origin', '*');

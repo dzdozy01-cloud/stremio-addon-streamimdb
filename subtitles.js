@@ -13,17 +13,8 @@ const LANG_MAP = {
   spanish: 'es', french: 'fr', german: 'de', italian: 'it',
 };
 
-// Cache SRT em memória por fileId
+// Cache: "fileId:season:episode" → SRT content
 const srtCache = new Map();
-
-// Valida se o nome do ficheiro corresponde ao episódio pedido
-function matchesEpisode(name, season, episode) {
-  if (!season || !episode) return true;
-  const s = String(season).padStart(2, '0');
-  const e = String(episode).padStart(2, '0');
-  const pattern = new RegExp(`S${s}E${e}`, 'i');
-  return pattern.test(name);
-}
 
 async function searchSubtitles(imdbId, season, episode) {
   if (!enabled) return [];
@@ -40,16 +31,12 @@ async function searchSubtitles(imdbId, season, episode) {
     for (const sub of subs) {
       const rawLang = (sub.lang || '').toLowerCase();
       const lang    = LANG_MAP[rawLang] || rawLang.slice(0, 2);
-      const name    = sub.name || sub.release_name || '';
       const fileId  = sub.url ? sub.url.split('/').pop() : null;
-
-      if (!lang || !fileId) continue;
-      if (!matchesEpisode(name, season, episode)) continue;
-      if (!byLang[lang]) byLang[lang] = fileId;
+      if (lang && fileId && !byLang[lang]) byLang[lang] = fileId;
     }
 
     const found = Object.entries(byLang).map(([lang, fileId]) => ({ lang, fileId }));
-    console.log(`[subs] ${found.length} legenda(s) para S${season}E${episode}`);
+    console.log(`[subs] ${found.length} pack(s) encontrado(s) para S${season}E${episode}`);
     return found;
   } catch (e) {
     console.log('[subs] Erro na pesquisa:', e.message);
@@ -57,8 +44,10 @@ async function searchSubtitles(imdbId, season, episode) {
   }
 }
 
-async function getSrtContent(fileId) {
-  if (srtCache.has(fileId)) return srtCache.get(fileId);
+// Descarrega ZIP, procura SRT do episódio específico dentro do pack
+async function getSrtContent(fileId, season, episode) {
+  const cacheKey = `${fileId}:${season}:${episode}`;
+  if (srtCache.has(cacheKey)) return srtCache.get(cacheKey);
 
   try {
     const res = await axios.get(`${DL_BASE}/subtitle/${fileId}`, {
@@ -66,12 +55,26 @@ async function getSrtContent(fileId) {
       timeout: 10000,
     });
 
-    const zip   = new AdmZip(Buffer.from(res.data));
-    const entry = zip.getEntries().find(e => e.entryName.toLowerCase().endsWith('.srt'));
+    const zip     = new AdmZip(Buffer.from(res.data));
+    const entries = zip.getEntries().filter(e => e.entryName.toLowerCase().endsWith('.srt'));
+
+    let entry = null;
+
+    // 1. Procura SRT com S##E## exacto
+    if (season && episode) {
+      const s = String(season).padStart(2, '0');
+      const e = String(episode).padStart(2, '0');
+      const re = new RegExp(`S${s}E${e}`, 'i');
+      entry = entries.find(en => re.test(en.entryName));
+    }
+
+    // 2. Fallback: primeiro SRT disponível
+    if (!entry) entry = entries[0];
     if (!entry) return null;
 
+    console.log(`[subs] A servir: ${entry.entryName}`);
     const content = entry.getData().toString('utf8');
-    srtCache.set(fileId, content);
+    srtCache.set(cacheKey, content);
     return content;
   } catch (e) {
     console.log('[subs] Erro ao descarregar:', e.message);

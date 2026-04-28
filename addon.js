@@ -42,7 +42,7 @@ builder.defineStreamHandler(async (args) => {
 
     const subtitles = subResults.map(({ lang, fileId }) => ({
       id: `${imdbId}-${lang}`,
-      url: `${ADDON_URL}/subs/${fileId}.srt`,
+      url: `${ADDON_URL}/subs/${fileId}.srt?s=${season || ''}&e=${episode || ''}`,
       lang,
     }));
 
