@@ -21,20 +21,32 @@ function getCached(key) {
   const entry = cache.get(key);
   if (!entry) return null;
   if (Date.now() - entry.timestamp > CACHE_TTL) { cache.delete(key); return null; }
-  return entry.url;
+  return { url: entry.url, subtitles: entry.subtitles };
 }
 
-function setCached(key, url) {
-  cache.set(key, { url, timestamp: Date.now() });
-  console.log(`[cache] Guardado: ${key} (cache size: ${cache.size})`);
+function setCached(key, { url, subtitles }) {
+  cache.set(key, { url, subtitles, timestamp: Date.now() });
+  console.log(`[cache] Guardado: ${key} — ${subtitles.length} legenda(s) (cache size: ${cache.size})`);
 }
 
+// Extrai tracks de subtítulos do master HLS (#EXT-X-MEDIA:TYPE=SUBTITLES)
+function parseSubtitles(content, masterUrl) {
+  const subtitles = [];
+  for (const line of content.split('\n')) {
+    if (!line.startsWith('#EXT-X-MEDIA:') || !line.includes('TYPE=SUBTITLES')) continue;
+    const lang = (line.match(/LANGUAGE="([^"]+)"/) || [])[1] || 'und';
+    const uri  = (line.match(/URI="([^"]+)"/) || [])[1];
+    if (!uri) continue;
+    const url = uri.startsWith('http') ? uri : new URL(uri, masterUrl).href;
+    subtitles.push({ id: lang, url, lang });
+  }
+  return subtitles;
+}
 
-// Testa um stream_url e retorna { url, verified }:
-//   verified=true  → CDN respondeu 200 com playlist HLS válida
-//   verified=false → CDN respondeu 4xx (provavelmente funciona no Stremio)
+// Testa um stream_url:
+//   verified=true  → CDN respondeu 200, subtítulos extraídos do master
+//   verified=false → CDN respondeu 4xx (stream provavelmente funciona)
 //   null           → CDN inacessível (timeout / 5xx)
-// Devolve sempre o master URL — o Stremio gere qualidade e subtitle tracks nativamente
 async function resolveStream(m3u8Url, referer) {
   for (const headers of [{ 'User-Agent': UA, Referer: referer }, { 'User-Agent': UA }]) {
     try {
@@ -47,18 +59,18 @@ async function resolveStream(m3u8Url, referer) {
       });
       if (res.status === 200) {
         const body = typeof res.data === 'string' ? res.data : '';
-        if (body.trimStart().startsWith('#EXTM3U'))
-          return { url: m3u8Url, verified: true };
+        if (body.trimStart().startsWith('#EXTM3U')) {
+          const subtitles = parseSubtitles(body, m3u8Url);
+          return { url: m3u8Url, verified: true, subtitles };
+        }
       }
-      // 4xx — CDN está vivo mas bloqueia o pré-fetch
-      return { url: m3u8Url, verified: false };
+      return { url: m3u8Url, verified: false, subtitles: [] };
     } catch { /* timeout ou erro de rede — tenta sem Referer */ }
   }
-  return null; // CDN inacessível
+  return null;
 }
 
 async function doFetch(imdbId, type, season, episode) {
-  // O Referer deve imitar a página embed do brightpathsignals para a API autorizar o pedido
   const referer = type === 'series'
     ? `${BRIGHTPATH_BASE}/tv/${imdbId}/${season}/${episode}`
     : `${BRIGHTPATH_BASE}/movie/${imdbId}`;
@@ -86,8 +98,7 @@ async function doFetch(imdbId, type, season, episode) {
   }
 
   const body = apiRes.data;
-  const preview = JSON.stringify(body).substring(0, 200);
-  console.log(`[scraper] API ${apiRes.status} — ${preview}`);
+  console.log(`[scraper] API ${apiRes.status} — ${JSON.stringify(body).substring(0, 200)}`);
 
   if (apiRes.status !== 200 || !body || !body.data) {
     console.log('[scraper] Resposta inválida ou erro da API');
@@ -100,17 +111,22 @@ async function doFetch(imdbId, type, season, episode) {
     return null;
   }
 
-  // Testa todas as fontes em paralelo e escolhe a melhor disponível
   const results = await Promise.all(streamUrls.map(u => resolveStream(u, referer)));
 
   const verified = results.find(r => r?.verified);
-  if (verified) { console.log('[scraper] Fonte verificada (200)'); return verified.url; }
+  if (verified) {
+    console.log(`[scraper] Fonte verificada (200) — ${verified.subtitles.length} legenda(s)`);
+    return { url: verified.url, subtitles: verified.subtitles };
+  }
 
   const fallback = results.find(r => r && !r.verified);
-  if (fallback) { console.log('[scraper] Fonte acessível (CDN bloqueou pré-fetch)'); return fallback.url; }
+  if (fallback) {
+    console.log('[scraper] Fonte acessível (CDN bloqueou pré-fetch)');
+    return { url: fallback.url, subtitles: [] };
+  }
 
   console.log('[scraper] Todas as fontes inacessíveis — a usar primeira como último recurso');
-  return streamUrls[0];
+  return { url: streamUrls[0], subtitles: [] };
 }
 
 async function fetchVideoSource(imdbId, type = 'movie', season = null, episode = null) {
@@ -120,13 +136,13 @@ async function fetchVideoSource(imdbId, type = 'movie', season = null, episode =
 
   // 1. Cache hit
   const cached = getCached(key);
-  if (cached) { console.log(`[cache] Hit: ${key}`); return { url: cached, type: 'direct' }; }
+  if (cached) { console.log(`[cache] Hit: ${key}`); return { ...cached, type: 'direct' }; }
 
   // 2. Deduplicação
   if (pending.has(key)) {
     console.log(`[cache] Dedup: aguardando fetch em curso para ${key}`);
-    const url = await pending.get(key);
-    return url ? { url, type: 'direct' } : null;
+    const result = await pending.get(key);
+    return result ? { ...result, type: 'direct' } : null;
   }
 
   // 3. Rejeição por sobrecarga
@@ -138,11 +154,11 @@ async function fetchVideoSource(imdbId, type = 'movie', season = null, episode =
   // 4. Novo fetch
   activeScrapes++;
   const fetchPromise = doFetch(imdbId, type, season, episode)
-    .then(url => {
-      if (url) setCached(key, url);
+    .then(result => {
+      if (result) setCached(key, result);
       pending.delete(key);
       activeScrapes = Math.max(0, activeScrapes - 1);
-      return url;
+      return result;
     })
     .catch(err => {
       console.error('[scraper] Erro:', err.message);
@@ -152,15 +168,15 @@ async function fetchVideoSource(imdbId, type = 'movie', season = null, episode =
     });
 
   pending.set(key, fetchPromise);
-  const url = await fetchPromise;
-  return url ? { url, type: 'direct' } : null;
+  const result = await fetchPromise;
+  return result ? { ...result, type: 'direct' } : null;
 }
 
 function getStatus() {
   const now = Date.now();
   const entries = [];
   for (const [key, entry] of cache.entries()) {
-    entries.push({ key, ageSeconds: Math.floor((now - entry.timestamp) / 1000) });
+    entries.push({ key, ageSeconds: Math.floor((now - entry.timestamp) / 1000), subtitles: entry.subtitles.length });
   }
   return {
     activeScrapes,

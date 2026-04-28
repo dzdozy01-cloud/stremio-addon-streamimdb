@@ -35,16 +35,15 @@ builder.defineStreamHandler(async (args) => {
     }
 
     if (result && result.type === 'direct') {
-      return {
-        streams: [{
-          url: result.url,
-          name: 'StreamIMDb',
-          title: 'Stream direto',
-          behaviorHints: {
-            bingeGroup: `streamimdb|${imdbId}`
-          }
-        }]
+      const stream = {
+        url: result.url,
+        name: 'StreamIMDb',
+        title: 'Stream direto',
+        behaviorHints: { bingeGroup: `streamimdb|${imdbId}` }
       };
+      if (result.subtitles && result.subtitles.length)
+        stream.subtitles = result.subtitles;
+      return { streams: [stream] };
     }
 
     return {
