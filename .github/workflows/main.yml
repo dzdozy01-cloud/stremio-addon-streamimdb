@@ -10,9 +10,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
+      
       - name: Sync Upstream
         uses: aormsby/Fork-Sync-With-Upstream-action@v3.4
         with:
@@ -20,5 +18,4 @@ jobs:
           target_sync_branch: main
           upstream_sync_repo: F100Pilot/stremio-addon-streamimdb
           upstream_sync_branch: main
-          # This line prevents the 128 error if things are already synced
-          test_mode: false 
+          test_mode: true # This prevents the error if already up to date
