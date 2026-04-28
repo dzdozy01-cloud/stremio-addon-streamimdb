@@ -45,7 +45,6 @@ builder.defineStreamHandler(async (args) => {
           url: result.url,
           name: 'StreamIMDb',
           title: type === 'series' ? `S${season}E${episode}` : 'Stream direto',
-          behaviorHints: { bingeGroup: `streamimdb|${imdbId}` },
         }]
       };
     }

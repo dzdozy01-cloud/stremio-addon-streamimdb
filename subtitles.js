@@ -19,7 +19,7 @@ const srtCache = new Map();
 async function searchSubtitles(imdbId, season, episode) {
   if (!enabled) return [];
 
-  const params = { api_key: API_KEY, imdb_id: imdbId, languages: 'en,pt,pt-BR' };
+  const params = { api_key: API_KEY, imdb_id: imdbId, languages: 'en,pt' };
   if (season)  { params.season_number  = season;  }
   if (episode) { params.episode_number = episode; }
 
