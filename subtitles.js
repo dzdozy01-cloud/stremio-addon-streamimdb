@@ -2,22 +2,47 @@
 const axios = require('axios');
 
 const API_KEY  = process.env.OPENSUBTITLES_API_KEY;
+const USERNAME = process.env.OPENSUBTITLES_USERNAME;
+const PASSWORD = process.env.OPENSUBTITLES_PASSWORD;
 const API_BASE = 'https://api.opensubtitles.com/api/v1';
 
-const enabled = !!API_KEY;
+const enabled = !!(API_KEY && USERNAME && PASSWORD);
+
+// JWT token state
+let jwtToken   = null;
+let jwtExpires = 0; // epoch ms
 
 // Cache: fileId → SRT string (permanent, cleared on restart)
 const srtCache  = new Map();
 // Cache: fileId → { link, fetchedAt } — links valid ~24h, we refresh after 20h
 const linkCache = new Map();
 const LINK_TTL  = 20 * 60 * 60 * 1000;
+const TOKEN_TTL = 23 * 60 * 60 * 1000; // re-login after 23h
 
-function headers() {
-  return {
-    'Api-Key':      API_KEY,
-    'User-Agent':   'StreamIMDbConnector/1.2',
-    'Content-Type': 'application/json',
-  };
+function baseHeaders() {
+  return { 'Api-Key': API_KEY, 'User-Agent': 'StreamIMDbConnector/1.2', 'Content-Type': 'application/json' };
+}
+
+function authHeaders() {
+  return { ...baseHeaders(), 'Authorization': `Bearer ${jwtToken}` };
+}
+
+async function ensureLogin() {
+  if (jwtToken && Date.now() < jwtExpires) return true;
+  try {
+    const res = await axios.post(
+      `${API_BASE}/login`,
+      { username: USERNAME, password: PASSWORD },
+      { headers: baseHeaders(), timeout: 8000 }
+    );
+    jwtToken   = res.data?.token;
+    jwtExpires = Date.now() + TOKEN_TTL;
+    console.log('[subs] Login OpenSubtitles OK');
+    return !!jwtToken;
+  } catch (e) {
+    console.log('[subs] Erro no login:', e.message);
+    return false;
+  }
 }
 
 async function searchSubtitles(imdbId, season, episode) {
@@ -38,7 +63,7 @@ async function searchSubtitles(imdbId, season, episode) {
   }
 
   try {
-    const res  = await axios.get(`${API_BASE}/subtitles`, { params, headers: headers(), timeout: 6000 });
+    const res  = await axios.get(`${API_BASE}/subtitles`, { params, headers: baseHeaders(), timeout: 6000 });
     const data = res.data?.data || [];
 
     // One entry per language — highest download_count first (API already sorted)
@@ -64,11 +89,14 @@ async function getDownloadLink(fileId) {
   const cached = linkCache.get(fileId);
   if (cached && Date.now() - cached.fetchedAt < LINK_TTL) return cached.link;
 
+  const ok = await ensureLogin();
+  if (!ok) return null;
+
   try {
     const res  = await axios.post(
       `${API_BASE}/download`,
       { file_id: parseInt(fileId, 10) },
-      { headers: headers(), timeout: 8000 }
+      { headers: authHeaders(), timeout: 8000 }
     );
     const link = res.data?.link;
     if (!link) return null;

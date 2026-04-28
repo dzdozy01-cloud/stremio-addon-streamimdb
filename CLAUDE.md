@@ -36,6 +36,8 @@ Porta ocupada: `powershell -Command "$c=Get-NetTCPConnection -LocalPort 7000 -EA
 |---|---|
 | `VAPLAYER_API_URL` | `https://streamdata.vaplayer.ru/api.php` |
 | `OPENSUBTITLES_API_KEY` | — (legendas desactivadas se ausente) |
+| `OPENSUBTITLES_USERNAME` | — (conta opensubtitles.com) |
+| `OPENSUBTITLES_PASSWORD` | — (conta opensubtitles.com) |
 | `ADDON_URL` | `http://localhost:7000` (deve ser URL público no Render) |
 | `CACHE_TTL_MS` | `7200000` (2h) |
 | `MAX_QUEUE` | `3` |
