@@ -6,8 +6,6 @@ const API_BASE = 'https://api.opensubtitles.com/api/v1';
 
 const enabled = !!API_KEY;
 
-const WANTED_LANGS = ['en', 'pt-BR', 'pt'];
-
 // Cache: fileId → SRT string (permanent, cleared on restart)
 const srtCache  = new Map();
 // Cache: fileId → { link, fetchedAt } — links valid ~24h, we refresh after 20h
@@ -26,9 +24,8 @@ async function searchSubtitles(imdbId, season, episode) {
   if (!enabled) return [];
 
   const params = {
-    imdb_id:        imdbId,
-    languages:      WANTED_LANGS.join(','),
-    order_by:       'download_count',
+    imdb_id:         imdbId,
+    order_by:        'download_count',
     order_direction: 'desc',
   };
 
@@ -44,17 +41,18 @@ async function searchSubtitles(imdbId, season, episode) {
     const res  = await axios.get(`${API_BASE}/subtitles`, { params, headers: headers(), timeout: 6000 });
     const data = res.data?.data || [];
 
+    // One entry per language — highest download_count first (API already sorted)
     const byLang = {};
     for (const item of data) {
       const lang   = item.attributes?.language;
       const fileId = item.attributes?.files?.[0]?.file_id;
-      if (lang && fileId && WANTED_LANGS.includes(lang) && !byLang[lang]) {
+      if (lang && fileId && !byLang[lang]) {
         byLang[lang] = String(fileId);
       }
     }
 
     const found = Object.entries(byLang).map(([lang, fileId]) => ({ lang, fileId }));
-    console.log(`[subs] ${found.length} resultado(s) — ${found.map(f => f.lang).join(',') || 'nenhum'}`);
+    console.log(`[subs] ${found.length} língua(s) — ${found.map(f => f.lang).join(',') || 'nenhuma'}`);
     return found;
   } catch (e) {
     console.log('[subs] Erro na pesquisa:', e.message);
