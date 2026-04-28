@@ -1,5 +1,10 @@
 'use strict';
 const axios = require('axios');
+const { searchSubtitles } = require('./subtitles');
+
+const ADDON_URL = process.env.ADDON_URL
+  || process.env.RENDER_EXTERNAL_URL
+  || `http://localhost:${process.env.PORT || 7000}`;
 
 const VAPLAYER_API_URL = process.env.VAPLAYER_API_URL || 'https://streamdata.vaplayer.ru/api.php';
 const BRIGHTPATH_BASE  = 'https://brightpathsignals.com/embed';
@@ -29,22 +34,8 @@ function setCached(key, { url, subtitles }) {
   console.log(`[cache] Guardado: ${key} — ${subtitles.length} legenda(s) (cache size: ${cache.size})`);
 }
 
-// Extrai tracks de subtítulos do master HLS (#EXT-X-MEDIA:TYPE=SUBTITLES)
-function parseSubtitles(content, masterUrl) {
-  const subtitles = [];
-  for (const line of content.split('\n')) {
-    if (!line.startsWith('#EXT-X-MEDIA:') || !line.includes('TYPE=SUBTITLES')) continue;
-    const lang = (line.match(/LANGUAGE="([^"]+)"/) || [])[1] || 'und';
-    const uri  = (line.match(/URI="([^"]+)"/) || [])[1];
-    if (!uri) continue;
-    const url = uri.startsWith('http') ? uri : new URL(uri, masterUrl).href;
-    subtitles.push({ id: lang, url, lang });
-  }
-  return subtitles;
-}
-
 // Testa um stream_url:
-//   verified=true  → CDN respondeu 200, subtítulos extraídos do master
+//   verified=true  → CDN respondeu 200 com playlist HLS válida
 //   verified=false → CDN respondeu 4xx (stream provavelmente funciona)
 //   null           → CDN inacessível (timeout / 5xx)
 async function resolveStream(m3u8Url, referer) {
@@ -59,12 +50,10 @@ async function resolveStream(m3u8Url, referer) {
       });
       if (res.status === 200) {
         const body = typeof res.data === 'string' ? res.data : '';
-        if (body.trimStart().startsWith('#EXTM3U')) {
-          const subtitles = parseSubtitles(body, m3u8Url);
-          return { url: m3u8Url, verified: true, subtitles };
-        }
+        if (body.trimStart().startsWith('#EXTM3U'))
+          return { url: m3u8Url, verified: true };
       }
-      return { url: m3u8Url, verified: false, subtitles: [] };
+      return { url: m3u8Url, verified: false };
     } catch { /* timeout ou erro de rede — tenta sem Referer */ }
   }
   return null;
@@ -111,22 +100,30 @@ async function doFetch(imdbId, type, season, episode) {
     return null;
   }
 
-  const results = await Promise.all(streamUrls.map(u => resolveStream(u, referer)));
+  const [results, subResults] = await Promise.all([
+    Promise.all(streamUrls.map(u => resolveStream(u, referer))),
+    searchSubtitles(imdbId, season, episode),
+  ]);
+
+  // Constrói URLs do proxy local para cada fileId (URL fresca gerada em cada play)
+  const subtitles = subResults.map(({ lang, fileId }) => ({
+    id: lang, url: `${ADDON_URL}/subs/${fileId}`, lang,
+  }));
 
   const verified = results.find(r => r?.verified);
   if (verified) {
-    console.log(`[scraper] Fonte verificada (200) — ${verified.subtitles.length} legenda(s)`);
-    return { url: verified.url, subtitles: verified.subtitles };
+    console.log(`[scraper] Fonte verificada (200)`);
+    return { url: verified.url, subtitles };
   }
 
   const fallback = results.find(r => r && !r.verified);
   if (fallback) {
     console.log('[scraper] Fonte acessível (CDN bloqueou pré-fetch)');
-    return { url: fallback.url, subtitles: [] };
+    return { url: fallback.url, subtitles };
   }
 
   console.log('[scraper] Todas as fontes inacessíveis — a usar primeira como último recurso');
-  return { url: streamUrls[0], subtitles: [] };
+  return { url: streamUrls[0], subtitles };
 }
 
 async function fetchVideoSource(imdbId, type = 'movie', season = null, episode = null) {

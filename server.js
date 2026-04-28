@@ -2,6 +2,7 @@ const express = require('express');
 const { getRouter } = require('stremio-addon-sdk');
 const addonInterface = require('./addon');
 const { getStatus } = require('./scraper');
+const { getDownloadUrl, enabled: subsEnabled } = require('./subtitles');
 
 const START_TIME = Date.now();
 
@@ -85,6 +86,14 @@ app.get('/', (req, res) => {
   </script>
 </body>
 </html>`);
+});
+
+// Proxy de subtítulos — gera URL de download fresca no momento do play
+app.get('/subs/:fileId', async (req, res) => {
+  if (!subsEnabled) return res.status(503).json({ error: 'Subtitles not configured' });
+  const url = await getDownloadUrl(req.params.fileId);
+  if (!url) return res.status(404).json({ error: 'Subtitle not found' });
+  res.redirect(302, url);
 });
 
 app.get('/health', (req, res) => {
