@@ -5,18 +5,20 @@ on:
   workflow_dispatch:
 
 jobs:
-  sync_with_upstream:
+  sync:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - name: Checkout target repo
-        uses: actions/checkout@v3
-
-      - name: Sync Upstream
-        uses: aormsby/Fork-Sync-With-Upstream-action@v3.4
-        with:
-          target_repo_token: ${{ secrets.GITHUB_TOKEN }}
-          target_sync_branch: main
-          upstream_sync_repo: F100Pilot/stremio-addon-streamimdb
-          upstream_sync_branch: main
-          # This is the "Fix" for the 128 error
-          test_mode: true 
+      - name: Checkout
+        uses: actions/checkout@v4 # Updated to v4 for Node 24 support
+      
+      - name: Sync from Upstream
+        run: |
+          git config --global user.name 'GitHub Action'
+          git config --global user.email 'action@github.com'
+          git remote add upstream https://github.com/F100Pilot/stremio-addon-streamimdb.git
+          git fetch upstream
+          git checkout main
+          git merge upstream/main --ff-only || echo "Already up to date, skipping merge."
+          git push origin main || echo "No changes to push."
