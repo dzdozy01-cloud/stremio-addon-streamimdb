@@ -14,7 +14,10 @@ const manifest = {
   logo: 'https://raw.githubusercontent.com/F100Pilot/stremio-addon-streamimdb/main/icon.png',
   types: ['movie', 'series'],
   catalogs: [],
-  resources: ['stream'],
+  resources: [
+    'stream',
+    { name: 'subtitles', types: ['movie', 'series'], idPrefixes: ['tt'] }
+  ],
   idPrefixes: ['tt']
 };
 
@@ -32,19 +35,9 @@ builder.defineStreamHandler(async (args) => {
       ? `https://streamimdb.me/embed/${imdbId}/${season}/${episode}/`
       : `https://streamimdb.me/embed/${imdbId}/`;
 
-    const [result, subResults] = await Promise.all([
-      fetchVideoSource(imdbId, type, season, episode).catch(e => {
-        console.error(`[handler] Erro no scraper: ${e.message}`);
-        return null;
-      }),
-      subsEnabled ? searchSubtitles(imdbId, season, episode) : Promise.resolve([]),
-    ]);
-
-    const subtitles = subResults.map(({ lang, fileId }) => ({
-      id: `${imdbId}-${lang}`,
-      url: `${ADDON_URL}/subs/${fileId}.srt?s=${season || ''}&e=${episode || ''}`,
-      lang,
-    }));
+    let result = null;
+    try { result = await fetchVideoSource(imdbId, type, season, episode); }
+    catch (e) { console.error(`[handler] Erro no scraper: ${e.message}`); }
 
     if (result && result.type === 'direct') {
       return {
@@ -53,7 +46,6 @@ builder.defineStreamHandler(async (args) => {
           name: 'StreamIMDb',
           title: type === 'series' ? `S${season}E${episode}` : 'Stream direto',
           behaviorHints: { bingeGroup: `streamimdb|${imdbId}` },
-          subtitles,
         }]
       };
     }
@@ -68,6 +60,30 @@ builder.defineStreamHandler(async (args) => {
   } catch (err) {
     console.error(`[handler] Erro inesperado: ${err.message}`);
     return { streams: [] };
+  }
+});
+
+// Stremio chama este handler separadamente por episódio — sem interferência do bingeGroup
+builder.defineSubtitlesHandler(async ({ id }) => {
+  try {
+    if (!subsEnabled) return { subtitles: [] };
+    const parts   = id.split(':');
+    const imdbId  = parts[0];
+    const season  = parts[1] || null;
+    const episode = parts[2] || null;
+
+    const subResults = await searchSubtitles(imdbId, season, episode);
+    const subtitles  = subResults.map(({ lang, fileId }) => ({
+      id:   `subdl-${lang}-${episode || ''}`,
+      url:  `${ADDON_URL}/subs/${fileId}.srt?s=${season || ''}&e=${episode || ''}`,
+      lang,
+    }));
+
+    console.log(`[subs handler] ${subtitles.length} legenda(s) para ${id}`);
+    return { subtitles };
+  } catch (err) {
+    console.error('[subs handler] Erro:', err.message);
+    return { subtitles: [] };
   }
 });
 
