@@ -8,10 +8,21 @@ const DL_BASE = 'https://dl.subdl.com';
 
 const enabled = !!API_KEY;
 
+// Línguas aceites → código ISO devolvido ao Stremio
 const LANG_MAP = {
-  english: 'en', portuguese: 'pt', 'brazilian-portuguese': 'pt-BR',
-  spanish: 'es', french: 'fr', german: 'de', italian: 'it',
+  english: 'en',
+  portuguese: 'pt',
+  'brazilian-portuguese': 'pt-BR',
+  'pt-br': 'pt-BR',
+  'portuguese (brazil)': 'pt-BR',
+  'portuguese brazil': 'pt-BR',
+  spanish: 'es',
+  french: 'fr',
+  german: 'de',
+  italian: 'it',
 };
+
+const WANTED_LANGS = new Set(['en', 'pt', 'pt-BR']);
 
 // Cache: "fileId:season:episode" → SRT content
 const srtCache = new Map();
@@ -19,7 +30,7 @@ const srtCache = new Map();
 async function searchSubtitles(imdbId, season, episode) {
   if (!enabled) return [];
 
-  const params = { api_key: API_KEY, imdb_id: imdbId, languages: 'en,pt,br,por' };
+  const params = { api_key: API_KEY, imdb_id: imdbId };
   if (season)  { params.season_number  = season;  }
   if (episode) { params.episode_number = episode; }
 
@@ -31,9 +42,9 @@ async function searchSubtitles(imdbId, season, episode) {
     const byLang = {};
     for (const sub of subs) {
       const rawLang = (sub.lang || '').toLowerCase();
-      const lang    = LANG_MAP[rawLang] || rawLang.slice(0, 2);
+      const lang    = LANG_MAP[rawLang];
       const fileId  = sub.url ? sub.url.split('/').pop() : null;
-      if (lang && fileId && !byLang[lang]) byLang[lang] = fileId;
+      if (lang && fileId && WANTED_LANGS.has(lang) && !byLang[lang]) byLang[lang] = fileId;
     }
 
     const found = Object.entries(byLang).map(([lang, fileId]) => ({ lang, fileId }));
