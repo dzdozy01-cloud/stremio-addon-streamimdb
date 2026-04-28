@@ -1,10 +1,5 @@
 'use strict';
 const axios = require('axios');
-const { searchSubtitles } = require('./subtitles');
-
-const ADDON_URL = process.env.ADDON_URL
-  || process.env.RENDER_EXTERNAL_URL
-  || `http://localhost:${process.env.PORT || 7000}`;
 
 const VAPLAYER_API_URL = process.env.VAPLAYER_API_URL || 'https://streamdata.vaplayer.ru/api.php';
 const BRIGHTPATH_BASE  = 'https://brightpathsignals.com/embed';
@@ -26,12 +21,12 @@ function getCached(key) {
   const entry = cache.get(key);
   if (!entry) return null;
   if (Date.now() - entry.timestamp > CACHE_TTL) { cache.delete(key); return null; }
-  return { url: entry.url, subtitles: entry.subtitles };
+  return entry.url;
 }
 
-function setCached(key, { url, subtitles }) {
-  cache.set(key, { url, subtitles, timestamp: Date.now() });
-  console.log(`[cache] Guardado: ${key} — ${subtitles.length} legenda(s) (cache size: ${cache.size})`);
+function setCached(key, url) {
+  cache.set(key, { url, timestamp: Date.now() });
+  console.log(`[cache] Guardado: ${key} (cache size: ${cache.size})`);
 }
 
 // Testa um stream_url:
@@ -100,30 +95,16 @@ async function doFetch(imdbId, type, season, episode) {
     return null;
   }
 
-  const [results, subResults] = await Promise.all([
-    Promise.all(streamUrls.map(u => resolveStream(u, referer))),
-    searchSubtitles(imdbId, season, episode),
-  ]);
-
-  // Constrói URLs do proxy local para cada fileId (URL fresca gerada em cada play)
-  const subtitles = subResults.map(({ lang, fileId }) => ({
-    id: lang, url: `${ADDON_URL}/subs/${fileId}`, lang,
-  }));
+  const results = await Promise.all(streamUrls.map(u => resolveStream(u, referer)));
 
   const verified = results.find(r => r?.verified);
-  if (verified) {
-    console.log(`[scraper] Fonte verificada (200)`);
-    return { url: verified.url, subtitles };
-  }
+  if (verified) { console.log('[scraper] Fonte verificada (200)'); return verified.url; }
 
   const fallback = results.find(r => r && !r.verified);
-  if (fallback) {
-    console.log('[scraper] Fonte acessível (CDN bloqueou pré-fetch)');
-    return { url: fallback.url, subtitles };
-  }
+  if (fallback) { console.log('[scraper] Fonte acessível (CDN bloqueou pré-fetch)'); return fallback.url; }
 
   console.log('[scraper] Todas as fontes inacessíveis — a usar primeira como último recurso');
-  return { url: streamUrls[0], subtitles };
+  return streamUrls[0];
 }
 
 async function fetchVideoSource(imdbId, type = 'movie', season = null, episode = null) {
@@ -131,31 +112,27 @@ async function fetchVideoSource(imdbId, type = 'movie', season = null, episode =
 
   const key = cacheKey(imdbId, type, season, episode);
 
-  // 1. Cache hit
   const cached = getCached(key);
-  if (cached) { console.log(`[cache] Hit: ${key}`); return { ...cached, type: 'direct' }; }
+  if (cached) { console.log(`[cache] Hit: ${key}`); return { url: cached, type: 'direct' }; }
 
-  // 2. Deduplicação
   if (pending.has(key)) {
     console.log(`[cache] Dedup: aguardando fetch em curso para ${key}`);
-    const result = await pending.get(key);
-    return result ? { ...result, type: 'direct' } : null;
+    const url = await pending.get(key);
+    return url ? { url, type: 'direct' } : null;
   }
 
-  // 3. Rejeição por sobrecarga
   if (activeScrapes >= MAX_QUEUE) {
     console.log(`[scraper] Sobrecarga (${activeScrapes} pedidos activos) — a rejeitar`);
     return null;
   }
 
-  // 4. Novo fetch
   activeScrapes++;
   const fetchPromise = doFetch(imdbId, type, season, episode)
-    .then(result => {
-      if (result) setCached(key, result);
+    .then(url => {
+      if (url) setCached(key, url);
       pending.delete(key);
       activeScrapes = Math.max(0, activeScrapes - 1);
-      return result;
+      return url;
     })
     .catch(err => {
       console.error('[scraper] Erro:', err.message);
@@ -165,15 +142,15 @@ async function fetchVideoSource(imdbId, type = 'movie', season = null, episode =
     });
 
   pending.set(key, fetchPromise);
-  const result = await fetchPromise;
-  return result ? { ...result, type: 'direct' } : null;
+  const url = await fetchPromise;
+  return url ? { url, type: 'direct' } : null;
 }
 
 function getStatus() {
   const now = Date.now();
   const entries = [];
   for (const [key, entry] of cache.entries()) {
-    entries.push({ key, ageSeconds: Math.floor((now - entry.timestamp) / 1000), subtitles: entry.subtitles.length });
+    entries.push({ key, ageSeconds: Math.floor((now - entry.timestamp) / 1000) });
   }
   return {
     activeScrapes,
