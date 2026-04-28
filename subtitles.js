@@ -27,14 +27,15 @@ async function searchSubtitles(imdbId, season, episode) {
 
   try {
     const res = await axios.get(API_URL, { params, timeout: 5000 });
-    console.log('[subs] Resposta API:', JSON.stringify(res.data).substring(0, 400));
     const subs = res.data?.subtitles || [];
 
     const byLang = {};
     for (const sub of subs) {
-      const rawLang = (sub.language || '').toLowerCase();
+      const rawLang = (sub.lang || '').toLowerCase();
       const lang    = LANG_MAP[rawLang] || rawLang.slice(0, 2);
-      if (lang && sub.sd_id && !byLang[lang]) byLang[lang] = sub.sd_id;
+      // fileId = filename do ZIP, ex: "3417823-8341324.zip"
+      const fileId  = sub.url ? sub.url.split('/').pop() : null;
+      if (lang && fileId && !byLang[lang]) byLang[lang] = fileId;
     }
 
     const found = Object.entries(byLang).map(([lang, fileId]) => ({ lang, fileId }));
@@ -47,11 +48,12 @@ async function searchSubtitles(imdbId, season, episode) {
 }
 
 // Descarrega ZIP do subdl, extrai SRT e devolve o conteúdo em texto
-async function getSrtContent(sdId) {
-  if (srtCache.has(sdId)) return srtCache.get(sdId);
+// fileId = filename do ZIP, ex: "3417823-8341324.zip"
+async function getSrtContent(fileId) {
+  if (srtCache.has(fileId)) return srtCache.get(fileId);
 
   try {
-    const res = await axios.get(`${DL_BASE}/subtitle/${sdId}.zip`, {
+    const res = await axios.get(`${DL_BASE}/subtitle/${fileId}`, {
       responseType: 'arraybuffer',
       timeout: 10000,
     });
@@ -61,7 +63,7 @@ async function getSrtContent(sdId) {
     if (!entry) return null;
 
     const content = entry.getData().toString('utf8');
-    srtCache.set(sdId, content);
+    srtCache.set(fileId, content);
     return content;
   } catch (e) {
     console.log('[subs] Erro ao descarregar subtítulo:', e.message);
