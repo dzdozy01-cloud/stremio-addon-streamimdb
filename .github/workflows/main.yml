@@ -8,9 +8,9 @@ jobs:
   sync_with_upstream:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout target repo
         uses: actions/checkout@v3
-      
+
       - name: Sync Upstream
         uses: aormsby/Fork-Sync-With-Upstream-action@v3.4
         with:
@@ -18,4 +18,5 @@ jobs:
           target_sync_branch: main
           upstream_sync_repo: F100Pilot/stremio-addon-streamimdb
           upstream_sync_branch: main
-          test_mode: true # This prevents the error if already up to date
+          # This is the "Fix" for the 128 error
+          test_mode: true 
