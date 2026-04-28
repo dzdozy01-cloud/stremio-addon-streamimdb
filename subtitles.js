@@ -1,36 +1,39 @@
 'use strict';
-const axios = require('axios');
+const axios  = require('axios');
+const AdmZip = require('adm-zip');
 
-const API_KEY  = process.env.OPENSUBTITLES_API_KEY;
-const BASE_URL = 'https://api.opensubtitles.com/api/v1';
-const HEADERS  = () => ({
-  'Api-Key': API_KEY,
-  'Content-Type': 'application/json',
-  'User-Agent': 'StreamIMDbConnector/1.1.1',
-});
+const API_KEY = process.env.SUBDL_API_KEY;
+const API_URL = 'https://api.subdl.com/api/v1/subtitles';
+const DL_BASE = 'https://dl.subdl.com';
 
 const enabled = !!API_KEY;
+
+// Mapa de nomes subdl → ISO 639-1
+const LANG_MAP = {
+  english: 'en', portuguese: 'pt', 'brazilian-portuguese': 'pt',
+  spanish: 'es', french: 'fr', german: 'de', italian: 'it',
+  dutch: 'nl', arabic: 'ar', turkish: 'tr', russian: 'ru',
+};
+
+// Cache em memória: sdId → conteúdo SRT (evita redownload)
+const srtCache = new Map();
 
 // Busca subtítulos por IMDb ID + season/episode; retorna [{lang, fileId}]
 async function searchSubtitles(imdbId, season, episode) {
   if (!enabled) return [];
 
-  const params = { imdb_id: imdbId.replace('tt', ''), languages: 'en,pt,es,fr' };
-  if (season)  { params.season_number = season; params.episode_number = episode; }
+  const params = { api_key: API_KEY, imdb_id: imdbId, languages: 'en,pt' };
+  if (season) { params.season_number = season; params.episode_number = episode; }
 
   try {
-    const res = await axios.get(`${BASE_URL}/subtitles`, {
-      params,
-      headers: HEADERS(),
-      timeout: 5000,
-    });
+    const res = await axios.get(API_URL, { params, timeout: 5000 });
+    const subs = res.data?.subtitles || [];
 
-    const results = res.data?.data || [];
     const byLang = {};
-    for (const item of results) {
-      const lang   = item.attributes?.language;
-      const fileId = item.attributes?.files?.[0]?.file_id;
-      if (lang && fileId && !byLang[lang]) byLang[lang] = fileId;
+    for (const sub of subs) {
+      const rawLang = (sub.language || '').toLowerCase();
+      const lang    = LANG_MAP[rawLang] || rawLang.slice(0, 2);
+      if (lang && sub.sd_id && !byLang[lang]) byLang[lang] = sub.sd_id;
     }
 
     const found = Object.entries(byLang).map(([lang, fileId]) => ({ lang, fileId }));
@@ -42,20 +45,27 @@ async function searchSubtitles(imdbId, season, episode) {
   }
 }
 
-// Obtém URL de download fresca para um fileId (chamado pelo proxy /subs/:fileId)
-async function getDownloadUrl(fileId) {
-  if (!enabled) return null;
+// Descarrega ZIP do subdl, extrai SRT e devolve o conteúdo em texto
+async function getSrtContent(sdId) {
+  if (srtCache.has(sdId)) return srtCache.get(sdId);
 
   try {
-    const res = await axios.post(`${BASE_URL}/download`,
-      { file_id: Number(fileId) },
-      { headers: HEADERS(), timeout: 5000 }
-    );
-    return res.data?.link || null;
+    const res = await axios.get(`${DL_BASE}/subtitle/${sdId}.zip`, {
+      responseType: 'arraybuffer',
+      timeout: 10000,
+    });
+
+    const zip    = new AdmZip(Buffer.from(res.data));
+    const entry  = zip.getEntries().find(e => e.entryName.toLowerCase().endsWith('.srt'));
+    if (!entry) return null;
+
+    const content = entry.getData().toString('utf8');
+    srtCache.set(sdId, content);
+    return content;
   } catch (e) {
-    console.log('[subs] Erro ao obter URL de download:', e.message);
+    console.log('[subs] Erro ao descarregar subtítulo:', e.message);
     return null;
   }
 }
 
-module.exports = { searchSubtitles, getDownloadUrl, enabled };
+module.exports = { searchSubtitles, getSrtContent, enabled };
