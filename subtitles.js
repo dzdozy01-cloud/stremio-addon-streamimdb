@@ -19,13 +19,14 @@ const srtCache = new Map();
 async function searchSubtitles(imdbId, season, episode) {
   if (!enabled) return [];
 
-  const params = { api_key: API_KEY, imdb_id: imdbId, languages: 'en,pt' };
+  const params = { api_key: API_KEY, imdb_id: imdbId, languages: 'en,pt,br,por' };
   if (season)  { params.season_number  = season;  }
   if (episode) { params.episode_number = episode; }
 
   try {
     const res = await axios.get(API_URL, { params, timeout: 5000 });
     const subs = res.data?.subtitles || [];
+    console.log(`[subs] Raw langs: ${[...new Set(subs.map(s => s.lang))].join(', ') || 'nenhum'}`);
 
     const byLang = {};
     for (const sub of subs) {
