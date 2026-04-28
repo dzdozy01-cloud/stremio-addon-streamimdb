@@ -6,9 +6,13 @@ on:
 
 jobs:
   sync:
-    runs-on: ubuntu-latest
+    # Force the latest Ubuntu runner which defaults to newer Node versions
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
+    env:
+      # Explicitly tell GitHub to use Node 24
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,7 +25,8 @@ jobs:
           git config --global user.email 'action@github.com'
           git remote add upstream https://github.com/F100Pilot/stremio-addon-streamimdb.git
           git fetch upstream
+          # Ensure we are on main
           git checkout main
-          # This line merges changes ONLY if they exist, otherwise it just prints a message
-          git merge upstream/main --ff-only || echo "Already up to date."
-          git push origin main || echo "Nothing to push."
+          # Merge only if there are changes; echo success if already synced
+          git merge upstream/main --ff-only || echo "No new changes to merge."
+          git push origin main || echo "Nothing new to push to origin."
