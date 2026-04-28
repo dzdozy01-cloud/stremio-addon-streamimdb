@@ -2,7 +2,7 @@ const express = require('express');
 const { getRouter } = require('stremio-addon-sdk');
 const addonInterface = require('./addon');
 const { getStatus } = require('./scraper');
-const { getSrtContent, enabled: subsEnabled } = require('./subtitles');
+const { getDownloadUrl, enabled: subsEnabled } = require('./subtitles');
 
 const START_TIME = Date.now();
 
@@ -88,16 +88,16 @@ app.get('/', (req, res) => {
 </html>`);
 });
 
-// Proxy de subtítulos — descarrega ZIP do subdl, extrai SRT e serve directamente
+// Proxy de subtítulos — gera URL fresca do OpenSubtitles e redireciona
+// URL termina em .srt para o Stremio reconhecer o formato
 app.get('/subs/:fileId', async (req, res) => {
-  console.log(`[subs proxy] Pedido: ${req.params.fileId}`);
+  const fileId = req.params.fileId.replace(/\.srt$/i, '');
+  console.log(`[subs proxy] Pedido fileId: ${fileId}`);
   if (!subsEnabled) return res.status(503).end();
-  const content = await getSrtContent(req.params.fileId);
-  if (!content) { console.log('[subs proxy] Conteúdo não encontrado'); return res.status(404).end(); }
-  console.log(`[subs proxy] A servir SRT (${content.length} chars)`);
-  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.send(content);
+  const url = await getDownloadUrl(fileId);
+  if (!url) { console.log('[subs proxy] URL não encontrada'); return res.status(404).end(); }
+  console.log(`[subs proxy] Redirect → ${url.substring(0, 60)}`);
+  res.redirect(302, url);
 });
 
 app.get('/health', (req, res) => {
