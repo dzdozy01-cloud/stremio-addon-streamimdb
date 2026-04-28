@@ -8,7 +8,7 @@ const DL_BASE = 'https://dl.subdl.com';
 
 const enabled = !!API_KEY;
 
-// Línguas aceites → código ISO devolvido ao Stremio
+// Nomes subdl (lowercase) → código ISO Stremio
 const LANG_MAP = {
   english: 'en',
   portuguese: 'pt',
@@ -20,6 +20,10 @@ const LANG_MAP = {
   french: 'fr',
   german: 'de',
   italian: 'it',
+  arabic: 'ar',
+  korean: 'ko',
+  norwegian: 'no',
+  farsi_persian: 'fa',
 };
 
 const WANTED_LANGS = new Set(['en', 'pt', 'pt-BR']);
@@ -37,7 +41,6 @@ async function searchSubtitles(imdbId, season, episode) {
   try {
     const res = await axios.get(API_URL, { params, timeout: 5000 });
     const subs = res.data?.subtitles || [];
-    console.log(`[subs] Raw langs: ${[...new Set(subs.map(s => s.lang))].join(', ') || 'nenhum'}`);
 
     const byLang = {};
     for (const sub of subs) {
