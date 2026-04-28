@@ -10,14 +10,14 @@ const enabled = !!(API_KEY && USERNAME && PASSWORD);
 
 // JWT token state
 let jwtToken   = null;
-let jwtExpires = 0; // epoch ms
+let jwtExpires = 0;
 
-// Cache: fileId → SRT string (permanent, cleared on restart)
+// Cache: fileId → SRT string
 const srtCache  = new Map();
-// Cache: fileId → { link, fetchedAt } — links valid ~24h, we refresh after 20h
+// Cache: fileId → { link, fetchedAt }
 const linkCache = new Map();
 const LINK_TTL  = 20 * 60 * 60 * 1000;
-const TOKEN_TTL = 23 * 60 * 60 * 1000; // re-login after 23h
+const TOKEN_TTL = 23 * 60 * 60 * 1000;
 
 function baseHeaders() {
   return { 'Api-Key': API_KEY, 'User-Agent': 'StreamIMDbConnector/1.2', 'Content-Type': 'application/json' };
@@ -67,7 +67,6 @@ async function searchSubtitles(imdbId, season, episode) {
     const res  = await axios.get(`${API_BASE}/subtitles`, { params, headers: baseHeaders(), timeout: 6000 });
     const data = res.data?.data || [];
 
-    // One entry per language — highest download_count first (API already sorted)
     const byLang = {};
     for (const item of data) {
       const lang   = item.attributes?.language;
@@ -93,21 +92,25 @@ async function getDownloadLink(fileId) {
   const ok = await ensureLogin();
   if (!ok) return null;
 
-  try {
-    const res  = await axios.post(
-      `${API_BASE}/download`,
-      { file_id: parseInt(fileId, 10) },
-      { headers: authHeaders(), timeout: 8000 }
-    );
-    const link = res.data?.link;
-    if (!link) return null;
-    linkCache.set(fileId, { link, fetchedAt: Date.now() });
-    return link;
-  } catch (e) {
-    const body = e.response?.data ? JSON.stringify(e.response.data) : e.message;
-    console.log(`[subs] Erro ao obter link (${e.response?.status}): ${body}`);
-    return null;
+  // 3 tentativas com backoff
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res  = await axios.post(
+        `${API_BASE}/download`,
+        { file_id: parseInt(fileId, 10) },
+        { headers: authHeaders(), timeout: 8000 }
+      );
+      const link = res.data?.link;
+      if (!link) return null;
+      linkCache.set(fileId, { link, fetchedAt: Date.now() });
+      return link;
+    } catch (e) {
+      const status = e.response?.status;
+      console.log(`[subs] /download tentativa ${attempt}/3 falhou (${status})`);
+      if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 2000));
+    }
   }
+  return null;
 }
 
 async function getSrtContent(fileId) {
