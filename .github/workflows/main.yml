@@ -7,17 +7,18 @@ on:
 jobs:
   sync_with_upstream:
     runs-on: ubuntu-latest
-    name: Sync with Upstream
     steps:
-      - name: Checkout target repo
+      - name: Checkout
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
       - name: Sync Upstream
-        uses: fabasoad/data-sync-action@v1.0.2
+        uses: aormsby/Fork-Sync-With-Upstream-action@v3.4
         with:
-          auth_token: ${{ secrets.GITHUB_TOKEN }}
-          upstream_repo: F100Pilot/stremio-addon-streamimdb
-          upstream_branch: main
-          target_branch: main
+          target_repo_token: ${{ secrets.GITHUB_TOKEN }}
+          target_sync_branch: main
+          upstream_sync_repo: F100Pilot/stremio-addon-streamimdb
+          upstream_sync_branch: main
+          # This line prevents the 128 error if things are already synced
+          test_mode: false 
