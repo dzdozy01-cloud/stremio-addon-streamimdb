@@ -50,7 +50,7 @@ async function searchSubtitles(imdbId, season, episode) {
 
   const params = {
     imdb_id:         imdbId,
-    languages:       'en,pt',
+    languages:       'en,pt-BR,pt-PT',
     order_by:        'download_count',
     order_direction: 'desc',
   };
