@@ -27,6 +27,7 @@ async function searchSubtitles(imdbId, season, episode) {
 
   try {
     const res = await axios.get(API_URL, { params, timeout: 5000 });
+    console.log('[subs] Resposta API:', JSON.stringify(res.data).substring(0, 400));
     const subs = res.data?.subtitles || [];
 
     const byLang = {};
