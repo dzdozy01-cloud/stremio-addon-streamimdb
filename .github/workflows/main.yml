@@ -1,17 +1,23 @@
 name: Scheduled Repo Sync
 on:
   schedule:
-    - cron: '0 * * * *' # Runs every hour
-  workflow_dispatch: # Allows you to run it manually
+    - cron: '0 * * * *'
+  workflow_dispatch:
 
 jobs:
-  sync:
+  sync_with_upstream:
     runs-on: ubuntu-latest
+    name: Sync with Upstream
     steps:
-      - name: Sync upstream changes
-        uses: aormsby/Fork-Sync-With-Upstream-action@v3.4
+      - name: Checkout target repo
+        uses: actions/checkout@v3
         with:
-          target_repo_token: ${{ secrets.GITHUB_TOKEN }}
-          target_sync_branch: main
-          upstream_sync_repo: F100Pilot/stremio-addon-streamimdb
-          upstream_sync_branch: main
+          fetch-depth: 0
+
+      - name: Sync Upstream
+        uses: fabasoad/data-sync-action@v1.0.2
+        with:
+          auth_token: ${{ secrets.GITHUB_TOKEN }}
+          upstream_repo: F100Pilot/stremio-addon-streamimdb
+          upstream_branch: main
+          target_branch: main
