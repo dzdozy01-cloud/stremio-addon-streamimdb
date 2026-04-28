@@ -90,9 +90,11 @@ app.get('/', (req, res) => {
 
 // Proxy de subtítulos — descarrega ZIP do subdl, extrai SRT e serve directamente
 app.get('/subs/:fileId', async (req, res) => {
+  console.log(`[subs proxy] Pedido: ${req.params.fileId}`);
   if (!subsEnabled) return res.status(503).end();
   const content = await getSrtContent(req.params.fileId);
-  if (!content) return res.status(404).end();
+  if (!content) { console.log('[subs proxy] Conteúdo não encontrado'); return res.status(404).end(); }
+  console.log(`[subs proxy] A servir SRT (${content.length} chars)`);
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.send(content);

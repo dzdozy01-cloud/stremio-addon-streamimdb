@@ -50,6 +50,7 @@ builder.defineStreamHandler(async (args) => {
     }));
 
     if (result && result.type === 'direct') {
+      if (subtitles.length) console.log(`[handler] Legendas no stream: ${JSON.stringify(subtitles)}`);
       const stream = {
         url: result.url,
         name: 'StreamIMDb',
