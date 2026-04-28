@@ -29,30 +29,12 @@ function setCached(key, url) {
   console.log(`[cache] Guardado: ${key} (cache size: ${cache.size})`);
 }
 
-function parseBestQuality(content, masterUrl) {
-  try {
-    const lines = content.split('\n');
-    let best = null;
-    let bestBandwidth = 0;
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i].startsWith('#EXT-X-STREAM-INF')) {
-        const bw  = parseInt((lines[i].match(/BANDWIDTH=(\d+)/) || [])[1] || 0);
-        const src = lines[i + 1]?.trim();
-        if (src && bw >= bestBandwidth) {
-          bestBandwidth = bw;
-          best = src.startsWith('http') ? src : new URL(src, masterUrl).href;
-        }
-      }
-    }
-    if (best) { console.log(`[scraper] Qualidade: ${Math.round(bestBandwidth / 1000)}kbps`); return best; }
-  } catch (e) { console.log('[scraper] Erro ao parsear qualidade:', e.message); }
-  return masterUrl;
-}
 
 // Testa um stream_url e retorna { url, verified }:
-//   verified=true  → CDN respondeu 200, qualidade seleccionada
+//   verified=true  → CDN respondeu 200 com playlist HLS válida
 //   verified=false → CDN respondeu 4xx (provavelmente funciona no Stremio)
 //   null           → CDN inacessível (timeout / 5xx)
+// Devolve sempre o master URL — o Stremio gere qualidade e subtitle tracks nativamente
 async function resolveStream(m3u8Url, referer) {
   for (const headers of [{ 'User-Agent': UA, Referer: referer }, { 'User-Agent': UA }]) {
     try {
@@ -66,7 +48,7 @@ async function resolveStream(m3u8Url, referer) {
       if (res.status === 200) {
         const body = typeof res.data === 'string' ? res.data : '';
         if (body.trimStart().startsWith('#EXTM3U'))
-          return { url: parseBestQuality(body, m3u8Url), verified: true };
+          return { url: m3u8Url, verified: true };
       }
       // 4xx — CDN está vivo mas bloqueia o pré-fetch
       return { url: m3u8Url, verified: false };
