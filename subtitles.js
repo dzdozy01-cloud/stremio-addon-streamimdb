@@ -9,7 +9,7 @@ const DL_BASE = 'https://dl.subdl.com';
 const enabled = !!API_KEY;
 
 const LANG_MAP = {
-  english: 'en', portuguese: 'pt', 'brazilian-portuguese': 'pt',
+  english: 'en', portuguese: 'pt', 'brazilian-portuguese': 'pt-BR',
   spanish: 'es', french: 'fr', german: 'de', italian: 'it',
 };
 
@@ -19,7 +19,7 @@ const srtCache = new Map();
 async function searchSubtitles(imdbId, season, episode) {
   if (!enabled) return [];
 
-  const params = { api_key: API_KEY, imdb_id: imdbId, languages: 'en,pt' };
+  const params = { api_key: API_KEY, imdb_id: imdbId, languages: 'en,pt,pb' };
   if (season)  { params.season_number  = season;  }
   if (episode) { params.episode_number = episode; }
 
