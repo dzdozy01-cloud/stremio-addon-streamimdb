@@ -1,0 +1,19 @@
+name: Deploy to Beamup
+on:
+  push:
+    branches: [ master, main ]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Deploy to Beamup
+        uses: Stremio/beamup-deploy-action@v1.0.1
+        with:
+          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
+          beamup_host: baby-beamup.club
+          project_name: dz-imdb-stream
+          username_github: dzdozy01-cloud
+
